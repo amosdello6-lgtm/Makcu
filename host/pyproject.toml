@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "makcu-host"
+version = "0.1.0"
+description = "Learning-project Python client for MAKCU-style firmware over serial."
+requires-python = ">=3.9"
+dependencies = ["pyserial>=3.5"]
+
+[tool.setuptools.packages.find]
+include = ["makcu_host*"]
