@@ -53,6 +53,16 @@ match `assistant`. Anyone with Manage Messages bypasses every filter.
 
 All filters are off until you turn them on.
 
+### Channel clearing
+`/clear` wipes a channel's entire history, not just the last 100 messages.
+It works by replacing the channel with an identical empty copy, which keeps
+the name, permissions, topic, slowmode and position. A confirmation button
+is required, and any stored settings pointing at that channel are updated
+automatically.
+
+`/autoclear` does the same on a schedule — hourly, daily, weekly, or any
+interval up to 30 days — per channel.
+
 ### Levels and XP
 Members earn randomised XP per message with a 60-second cooldown to stop
 spam farming. `/rank` shows level, server position and a progress bar;
@@ -507,6 +517,14 @@ there, separate from any feature code.
 | `/unban <user_id>` | Ban Members | Unban by ID |
 | `/purge <amount> [member]` | Manage Messages | Bulk delete, max 100 |
 
+### Channel clearing
+| Command | Permission | Description |
+|---|---|---|
+| `/clear [channel]` | Manage Channels | Delete the channel's entire history |
+| `/autoclear set <channel> <hours>` | Manage Channels | Clear on a schedule |
+| `/autoclear remove <channel>` | Manage Channels | Stop the schedule |
+| `/autoclear list` | Manage Channels | Show scheduled clears and next run |
+
 ### Levels
 | Command | Description |
 |---|---|
@@ -580,6 +598,7 @@ discord-bot/
 │   ├── general.py      help, ping, serverinfo, userinfo, avatar
 │   ├── moderation.py   warn, kick, ban, timeout, purge, audit logging
 │   ├── automod.py      invite/link/mention filters, word blocklist
+│   ├── cleanup.py      /clear and scheduled auto-clearing
 │   ├── welcome.py      join and leave messages, auto-role
 │   ├── leveling.py     XP, rank, leaderboard
 │   ├── tickets.py      ticket panel, private channels, close flow
@@ -636,3 +655,14 @@ enabled, and remember the 60-second per-member cooldown.
 
 **Bot goes offline when I close the terminal**
 Expected. See [Hosting it 24/7](#hosting-it-247).
+
+**`/clear` says it failed**
+It needs **Manage Channels**, since it works by cloning and deleting rather
+than bulk-deleting messages. Check the bot's role has that permission and
+sits above the channel's permission overwrites.
+
+**A channel disappeared after `/clear`**
+That's how it works — the original is deleted and replaced with an empty
+copy in the same position. The copy is a different channel internally, so
+any integration or webhook pointing at the old one needs re-adding. The
+bot's own settings are remapped automatically.

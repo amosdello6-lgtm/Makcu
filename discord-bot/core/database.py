@@ -61,6 +61,13 @@ CREATE TABLE IF NOT EXISTS blocked_words (
     word     TEXT    NOT NULL,
     PRIMARY KEY (guild_id, word)
 );
+
+CREATE TABLE IF NOT EXISTS autoclear (
+    channel_id     INTEGER PRIMARY KEY,
+    guild_id       INTEGER NOT NULL,
+    interval_hours INTEGER NOT NULL,
+    last_cleared   REAL    NOT NULL DEFAULT 0
+);
 """
 
 
@@ -270,3 +277,71 @@ class Database:
             "SELECT word FROM blocked_words WHERE guild_id = ?", (guild_id,)
         ) as cursor:
             return [row["word"] for row in await cursor.fetchall()]
+
+    # Scheduled channel clearing
+
+    async def set_autoclear(
+        self, channel_id: int, guild_id: int, interval_hours: int, now: float
+    ) -> None:
+        await self.conn.execute(
+            "INSERT INTO autoclear (channel_id, guild_id, interval_hours, last_cleared) "
+            "VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(channel_id) DO UPDATE SET interval_hours = excluded.interval_hours",
+            (channel_id, guild_id, interval_hours, now),
+        )
+        await self.conn.commit()
+
+    async def remove_autoclear(self, channel_id: int) -> int:
+        cursor = await self.conn.execute(
+            "DELETE FROM autoclear WHERE channel_id = ?", (channel_id,)
+        )
+        await self.conn.commit()
+        return cursor.rowcount
+
+    async def get_autoclears(self, guild_id: int) -> list[aiosqlite.Row]:
+        async with self.conn.execute(
+            "SELECT * FROM autoclear WHERE guild_id = ? ORDER BY interval_hours",
+            (guild_id,),
+        ) as cursor:
+            return list(await cursor.fetchall())
+
+    async def get_due_autoclears(self, now: float) -> list[aiosqlite.Row]:
+        async with self.conn.execute(
+            "SELECT * FROM autoclear "
+            "WHERE last_cleared + (interval_hours * 3600) <= ?",
+            (now,),
+        ) as cursor:
+            return list(await cursor.fetchall())
+
+    async def mark_autoclear_run(
+        self, old_channel_id: int, new_channel_id: int, now: float
+    ) -> None:
+        """Clearing clones the channel, so the row follows the new id."""
+        await self.conn.execute(
+            "UPDATE autoclear SET channel_id = ?, last_cleared = ? WHERE channel_id = ?",
+            (new_channel_id, now, old_channel_id),
+        )
+        await self.conn.commit()
+
+    async def remap_channel_references(
+        self, guild_id: int, old_channel_id: int, new_channel_id: int
+    ) -> list[str]:
+        """Point any settings holding old_channel_id at the new channel.
+
+        Clearing replaces a channel with a clone, which gets a fresh id, so
+        without this a cleared log or welcome channel silently stops working.
+        Returns the setting keys that were updated.
+        """
+        async with self.conn.execute(
+            "SELECT key FROM settings WHERE guild_id = ? AND value = ?",
+            (guild_id, str(old_channel_id)),
+        ) as cursor:
+            keys = [row["key"] for row in await cursor.fetchall()]
+
+        if keys:
+            await self.conn.execute(
+                "UPDATE settings SET value = ? WHERE guild_id = ? AND value = ?",
+                (str(new_channel_id), guild_id, str(old_channel_id)),
+            )
+            await self.conn.commit()
+        return keys

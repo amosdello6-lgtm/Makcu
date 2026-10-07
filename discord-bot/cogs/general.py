@@ -15,6 +15,7 @@ CATEGORY_LABELS = {
     "General": "General",
     "Moderation": "Moderation",
     "AutoMod": "Auto-moderation",
+    "Cleanup": "Channel clearing",
     "Leveling": "Levels & XP",
     "Tickets": "Support tickets",
     "RoleMenu": "Self-assignable roles",
