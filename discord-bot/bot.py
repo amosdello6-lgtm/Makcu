@@ -60,8 +60,27 @@ class Bot(commands.Bot):
         log.info("database ready at %s", config.DATABASE_PATH)
 
         await self._load_cogs()
+        self._register_persistent_views()
 
         await self._sync_commands()
+
+    def _register_persistent_views(self) -> None:
+        """Re-attach views whose buttons must survive a restart.
+
+        Discord doesn't store callbacks — only the `custom_id` on each
+        button. On boot we tell the bot which classes handle which ids,
+        otherwise every ticket panel and role menu posted before the
+        restart becomes a dead button.
+        """
+        from cogs.tickets import TicketPanelView, TicketCloseView
+        from cogs.rolemenu import RoleButton
+
+        self.add_view(TicketPanelView())
+        self.add_view(TicketCloseView())
+        # Role buttons carry their role id in the custom_id, so they're
+        # matched by regex template rather than registered one by one.
+        self.add_dynamic_items(RoleButton)
+        log.info("persistent views registered")
 
     async def _sync_commands(self) -> None:
         """Tell Discord which slash commands exist.

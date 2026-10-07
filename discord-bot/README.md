@@ -29,6 +29,38 @@ communities with different configs.
 - Level-up announcements in a channel of your choice
 - Toggleable per server
 
+**Support tickets**
+- `/ticket-panel` — post a panel with an "Open a ticket" button
+- Members get a private channel only they and staff can see
+- `/ticket-add` — pull another member into a ticket
+- Close button, with a summary posted to a ticket log channel
+- Limit of 3 open tickets per member so nobody floods you
+- Buttons are persistent — they survive bot restarts and redeploys
+
+**Self-assignable roles**
+- `/rolemenu create` — post a role menu
+- `/rolemenu add` — attach a role button to it (up to 25)
+- Click to get a role, click again to remove it
+- Rejects roles above the bot, `@everyone`, and integration-managed roles
+- Validates that a clicked role was actually published — a forged button
+  can't grant arbitrary roles
+
+**Auto-moderation**
+- `/automod invites` — delete Discord invite links
+- `/automod links` — delete all URLs
+- `/automod mentions` — delete messages with 5+ mentions
+- `/automod block-word` · `unblock-word` · `words` — custom word blocklist
+- `/automod status` — see what's on
+- Word matching uses word boundaries, so "assistant" doesn't trip a block on "ass"
+- Staff with Manage Messages always bypass every filter
+- Everything off by default
+
+**Event logging**
+- `/logging toggle` — per-event-type on/off
+- `/logging all` · `/logging status`
+- Logs deleted messages, edited messages (before/after), joins, leaves, role changes
+- Flags accounts less than 7 days old on join — the classic raid signal
+
 **General**
 - `/help` — builds itself from registered commands, so it never goes stale
 - `/serverinfo` · `/userinfo` · `/avatar` · `/ping`
@@ -37,6 +69,7 @@ communities with different configs.
 - `/config view` — every current setting at a glance
 - `/config welcome-channel` · `goodbye-channel` · `log-channel` · `levelup-channel`
 - `/config autorole` · `welcome-message` · `leveling`
+- `/config ticket-category` · `ticket-staff` · `ticket-log`
 - Admin-only, and hidden from members who can't use them
 
 ---
@@ -209,9 +242,13 @@ discord-bot/
 │   └── database.py     SQLite: per-guild settings, warns, XP
 ├── cogs/               one file per feature — add files here
 │   ├── general.py      help, ping, serverinfo, userinfo, avatar
-│   ├── moderation.py   warn, kick, ban, timeout, purge + logging
+│   ├── moderation.py   warn, kick, ban, timeout, purge + audit logging
+│   ├── automod.py      invite/link/mention filters, word blocklist
 │   ├── welcome.py      join/leave messages, auto-role
 │   ├── leveling.py     XP, /rank, /leaderboard
+│   ├── tickets.py      ticket panel, private channels, close button
+│   ├── rolemenu.py     self-assignable role buttons
+│   ├── serverlog.py    delete/edit/join/leave/role-change logging
 │   └── settings.py     /config commands
 ├── Procfile            tells Railway/Heroku how to start it
 └── requirements.txt

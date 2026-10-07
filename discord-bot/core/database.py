@@ -49,6 +49,30 @@ CREATE TABLE IF NOT EXISTS levels (
 );
 
 CREATE INDEX IF NOT EXISTS idx_levels_board ON levels (guild_id, xp DESC);
+
+CREATE TABLE IF NOT EXISTS tickets (
+    channel_id INTEGER PRIMARY KEY,
+    guild_id   INTEGER NOT NULL,
+    user_id    INTEGER NOT NULL,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    closed     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_tickets_open ON tickets (guild_id, user_id, closed);
+
+CREATE TABLE IF NOT EXISTS role_menu_options (
+    message_id INTEGER NOT NULL,
+    guild_id   INTEGER NOT NULL,
+    role_id    INTEGER NOT NULL,
+    label      TEXT    NOT NULL,
+    PRIMARY KEY (message_id, role_id)
+);
+
+CREATE TABLE IF NOT EXISTS blocked_words (
+    guild_id INTEGER NOT NULL,
+    word     TEXT    NOT NULL,
+    PRIMARY KEY (guild_id, word)
+);
 """
 
 
@@ -189,3 +213,90 @@ class Database:
         ) as cursor:
             row = await cursor.fetchone()
         return row["rank"] if row else 0
+
+    # -----------------------------------------------------------------
+    # Tickets
+    # -----------------------------------------------------------------
+
+    async def create_ticket(self, channel_id: int, guild_id: int, user_id: int) -> None:
+        await self.conn.execute(
+            "INSERT OR REPLACE INTO tickets (channel_id, guild_id, user_id) "
+            "VALUES (?, ?, ?)",
+            (channel_id, guild_id, user_id),
+        )
+        await self.conn.commit()
+
+    async def get_ticket(self, channel_id: int) -> Optional[aiosqlite.Row]:
+        async with self.conn.execute(
+            "SELECT * FROM tickets WHERE channel_id = ?", (channel_id,)
+        ) as cursor:
+            return await cursor.fetchone()
+
+    async def close_ticket(self, channel_id: int) -> None:
+        await self.conn.execute(
+            "UPDATE tickets SET closed = 1 WHERE channel_id = ?", (channel_id,)
+        )
+        await self.conn.commit()
+
+    async def count_open_tickets(self, guild_id: int, user_id: int) -> int:
+        """Used to stop one person opening fifty tickets."""
+        async with self.conn.execute(
+            "SELECT COUNT(*) AS n FROM tickets "
+            "WHERE guild_id = ? AND user_id = ? AND closed = 0",
+            (guild_id, user_id),
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row["n"] if row else 0
+
+    # -----------------------------------------------------------------
+    # Role menus
+    # -----------------------------------------------------------------
+
+    async def add_role_option(
+        self, message_id: int, guild_id: int, role_id: int, label: str
+    ) -> None:
+        await self.conn.execute(
+            "INSERT OR REPLACE INTO role_menu_options "
+            "(message_id, guild_id, role_id, label) VALUES (?, ?, ?, ?)",
+            (message_id, guild_id, role_id, label),
+        )
+        await self.conn.commit()
+
+    async def get_role_options(self, message_id: int) -> list[aiosqlite.Row]:
+        async with self.conn.execute(
+            "SELECT * FROM role_menu_options WHERE message_id = ?", (message_id,)
+        ) as cursor:
+            return list(await cursor.fetchall())
+
+    async def role_option_exists(self, guild_id: int, role_id: int) -> bool:
+        """Guard: a button must map to a role this guild actually published."""
+        async with self.conn.execute(
+            "SELECT 1 FROM role_menu_options WHERE guild_id = ? AND role_id = ? LIMIT 1",
+            (guild_id, role_id),
+        ) as cursor:
+            return await cursor.fetchone() is not None
+
+    # -----------------------------------------------------------------
+    # Blocked words
+    # -----------------------------------------------------------------
+
+    async def add_blocked_word(self, guild_id: int, word: str) -> None:
+        await self.conn.execute(
+            "INSERT OR IGNORE INTO blocked_words (guild_id, word) VALUES (?, ?)",
+            (guild_id, word.lower()),
+        )
+        await self.conn.commit()
+
+    async def remove_blocked_word(self, guild_id: int, word: str) -> int:
+        cursor = await self.conn.execute(
+            "DELETE FROM blocked_words WHERE guild_id = ? AND word = ?",
+            (guild_id, word.lower()),
+        )
+        await self.conn.commit()
+        return cursor.rowcount
+
+    async def get_blocked_words(self, guild_id: int) -> list[str]:
+        async with self.conn.execute(
+            "SELECT word FROM blocked_words WHERE guild_id = ?", (guild_id,)
+        ) as cursor:
+            return [row["word"] for row in await cursor.fetchall()]

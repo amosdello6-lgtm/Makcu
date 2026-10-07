@@ -27,10 +27,12 @@ KNOWN_SETTINGS: dict[str, str] = {
     "welcome_message": "Welcome message",
     "goodbye_channel": "Goodbye channel",
     "autorole": "Auto-role on join",
-    "log_channel": "Moderation log channel",
+    "log_channel": "Log channel",
     "levelup_channel": "Level-up announcement channel",
     "leveling_enabled": "Leveling system",
-    "mute_role": "Mute role",
+    "ticket_category": "Ticket category",
+    "ticket_staff_role": "Ticket staff role",
+    "ticket_log_channel": "Ticket log channel",
 }
 
 
@@ -77,9 +79,9 @@ class Settings(commands.Cog):
         """Turn a stored string into something readable in Discord."""
         if raw is None:
             return "*not set*"
-        if key.endswith("_channel"):
+        if key.endswith("_channel") or key == "ticket_category":
             return f"<#{raw}>"
-        if key in ("autorole", "mute_role"):
+        if key.endswith("_role") or key == "autorole":
             return f"<@&{raw}>"
         if key.endswith("_enabled"):
             return "on" if raw == "1" else "off"
@@ -207,6 +209,60 @@ class Settings(commands.Cog):
         await interaction.response.send_message(
             f"Welcome message saved. Preview:\n\n{preview}", ephemeral=True
         )
+
+    # -----------------------------------------------------------------
+    # Tickets
+    # -----------------------------------------------------------------
+
+    @group.command(
+        name="ticket-category",
+        description="Category where new ticket channels are created",
+    )
+    @app_commands.describe(category="Leave empty to create tickets at the top level")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def ticket_category(
+        self,
+        interaction: discord.Interaction,
+        category: discord.CategoryChannel | None = None,
+    ) -> None:
+        guild_id = interaction.guild_id
+        assert guild_id is not None
+
+        if category is None:
+            await self.bot.db.clear_setting(guild_id, "ticket_category")
+            await interaction.response.send_message(
+                "Ticket category cleared.", ephemeral=True
+            )
+            return
+
+        await self.bot.db.set_setting(guild_id, "ticket_category", category.id)
+        await interaction.response.send_message(
+            f"Tickets will be created under **{category.name}**.", ephemeral=True
+        )
+
+    @group.command(
+        name="ticket-staff",
+        description="Role that can see and answer every ticket",
+    )
+    @app_commands.describe(role="Leave empty to clear")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def ticket_staff(
+        self, interaction: discord.Interaction, role: discord.Role | None = None
+    ) -> None:
+        await self._set_or_clear(interaction, "ticket_staff_role", role)
+
+    @group.command(
+        name="ticket-log",
+        description="Where to post a summary when a ticket is closed",
+    )
+    @app_commands.describe(channel="Leave empty to turn ticket logging off")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def ticket_log(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel | None = None,
+    ) -> None:
+        await self._set_or_clear(interaction, "ticket_log_channel", channel)
 
     # -----------------------------------------------------------------
     # Toggles

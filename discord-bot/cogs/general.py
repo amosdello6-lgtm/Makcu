@@ -21,7 +21,11 @@ from core import config
 CATEGORY_LABELS = {
     "General": "General",
     "Moderation": "Moderation",
+    "AutoMod": "Auto-moderation",
     "Leveling": "Levels & XP",
+    "Tickets": "Support tickets",
+    "RoleMenu": "Self-assignable roles",
+    "ServerLog": "Event logging",
     "Settings": "Configuration (admins)",
     "Welcome": "Welcome system",
 }
