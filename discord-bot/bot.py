@@ -61,16 +61,46 @@ class Bot(commands.Bot):
 
         await self._load_cogs()
 
-        # Syncing tells Discord which slash commands exist.
-        # Guild-scoped sync is instant; global sync can take up to an hour.
+        await self._sync_commands()
+
+    async def _sync_commands(self) -> None:
+        """Tell Discord which slash commands exist.
+
+        Guild-scoped sync is instant; global sync can take up to an hour.
+        A guild sync fails with 403 when the bot isn't in that server, or
+        was invited without the `applications.commands` scope — that's a
+        setup mistake, not a reason to refuse to start, so fall back to a
+        global sync and say exactly what to fix.
+        """
         if config.DEV_GUILD_ID:
             guild = discord.Object(id=config.DEV_GUILD_ID)
-            self.tree.copy_global_to(guild=guild)
-            synced = await self.tree.sync(guild=guild)
-            log.info("synced %d commands to dev guild %s", len(synced), config.DEV_GUILD_ID)
-        else:
-            synced = await self.tree.sync()
-            log.info("synced %d commands globally (may take up to 1h to appear)", len(synced))
+            try:
+                self.tree.copy_global_to(guild=guild)
+                synced = await self.tree.sync(guild=guild)
+                log.info(
+                    "synced %d commands to dev guild %s",
+                    len(synced), config.DEV_GUILD_ID,
+                )
+                return
+            except discord.Forbidden:
+                log.error(
+                    "Can't sync commands to server %s — the bot isn't in it, or "
+                    "was invited without the 'applications.commands' scope.",
+                    config.DEV_GUILD_ID,
+                )
+                log.error(
+                    "Re-invite it with this link, then restart:\n"
+                    "https://discord.com/api/oauth2/authorize"
+                    "?client_id=%s&permissions=1099780156422"
+                    "&scope=bot%%20applications.commands",
+                    self.application_id,
+                )
+                log.warning("Falling back to a global sync for now.")
+
+        synced = await self.tree.sync()
+        log.info(
+            "synced %d commands globally (may take up to 1h to appear)", len(synced)
+        )
 
     async def _load_cogs(self) -> None:
         cogs_dir = pathlib.Path(__file__).parent / "cogs"
