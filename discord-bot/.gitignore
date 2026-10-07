@@ -1,0 +1,14 @@
+# Secrets — never commit these
+.env
+
+# Database
+data/
+*.db
+*.db-journal
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
