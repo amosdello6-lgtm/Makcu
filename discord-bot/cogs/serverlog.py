@@ -1,15 +1,8 @@
-"""Server event logging: deletes, edits, joins, leaves, role changes.
+"""Event logging: deletes, edits, joins, leaves, role changes.
 
-Separate from the moderation log (which records *actions staff took*).
-This records *things that happened*, which is what admins actually want
-when someone says "they deleted the message before I saw it".
-
-Named `serverlog` rather than `logging` on purpose — a module called
-`logging.py` invites confusion with Python's standard library one.
-
-Each event type is individually toggleable, because a busy server with
-every log on will flood a channel and the owner will turn the whole
-feature off instead of just the noisy part.
+Separate from the moderation log, which records staff actions rather than
+events. Each type toggles independently so a busy server can keep the
+useful ones. Not named logging.py to avoid shadowing the stdlib module.
 """
 
 from __future__ import annotations
@@ -34,12 +27,10 @@ class ServerLog(commands.Cog):
         guild_only=True,
     )
 
-    # -----------------------------------------------------------------
     # Helpers
-    # -----------------------------------------------------------------
 
     async def _channel(self, guild: discord.Guild, key: str) -> discord.TextChannel | None:
-        """Return the log channel if this event type is enabled."""
+        """Log channel, or None if this event type is disabled."""
         if await self.bot.db.get_setting(guild.id, key, "0") != "1":
             return None
         channel_id = await self.bot.db.get_int_setting(guild.id, "log_channel")
@@ -55,9 +46,7 @@ class ServerLog(commands.Cog):
         except discord.Forbidden:
             pass
 
-    # -----------------------------------------------------------------
     # Events
-    # -----------------------------------------------------------------
 
     @commands.Cog.listener()
     async def on_message_delete(self, message: discord.Message) -> None:
@@ -90,7 +79,7 @@ class ServerLog(commands.Cog):
     ) -> None:
         if before.guild is None or before.author.bot:
             return
-        # Embed loading fires an edit with identical content — ignore those.
+        # Embed loading fires an edit event with unchanged content.
         if before.content == after.content:
             return
         channel = await self._channel(before.guild, "log_edits")
@@ -132,7 +121,6 @@ class ServerLog(commands.Cog):
             value=discord.utils.format_dt(member.created_at, style="R"),
         )
         embed.add_field(name="Member count", value=str(member.guild.member_count))
-        # A brand-new account joining is the classic raid/alt signal.
         if age.days < 7:
             embed.add_field(
                 name="⚠️ New account",
@@ -200,9 +188,7 @@ class ServerLog(commands.Cog):
             )
         await self._post(channel, embed)
 
-    # -----------------------------------------------------------------
     # Configuration
-    # -----------------------------------------------------------------
 
     EVENTS = {
         "deletes": ("log_deletes", "Deleted messages"),
@@ -241,7 +227,7 @@ class ServerLog(commands.Cog):
                 interaction.guild_id, "log_channel"
             )
             if log_channel is None:
-                note = "\n\n⚠️ No log channel set yet — run `/config log-channel` too."
+                note = "\n\n⚠️ No log channel set yet - run `/config log-channel` too."
 
         await interaction.response.send_message(
             f"**{label}** logging is now **{'on' if enabled else 'off'}**.{note}",

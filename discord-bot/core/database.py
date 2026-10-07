@@ -1,17 +1,5 @@
-"""SQLite storage for the bot.
-
-Two ideas drive this design, and both exist so you can sell the same bot
-to many servers without rewriting it:
-
-1. **Everything is scoped by `guild_id`.** One running bot serves many
-   servers, and each one has its own settings, warns and XP. Nothing is
-   global.
-
-2. **Settings are a generic key/value table.** Adding a new configurable
-   option later needs no database migration — you just start calling
-   `set_setting(guild, "my_new_option", value)`. That's what makes
-   "can you also make it do X?" a ten-minute job instead of a rewrite.
-"""
+"""SQLite storage. Everything is scoped by guild_id so one instance can
+serve many servers with independent configuration."""
 
 from __future__ import annotations
 
@@ -101,9 +89,7 @@ class Database:
             raise RuntimeError("Database.connect() was never awaited")
         return self._conn
 
-    # -----------------------------------------------------------------
-    # Per-guild settings
-    # -----------------------------------------------------------------
+    # Settings -- a generic key/value store so new options need no migration.
 
     async def get_setting(self, guild_id: int, key: str, default: Any = None) -> Any:
         async with self.conn.execute(
@@ -122,7 +108,6 @@ class Database:
         await self.conn.commit()
 
     async def get_int_setting(self, guild_id: int, key: str) -> Optional[int]:
-        """Settings are stored as text; channel and role IDs need ints back."""
         raw = await self.get_setting(guild_id, key)
         if raw is None:
             return None
@@ -137,9 +122,7 @@ class Database:
         )
         await self.conn.commit()
 
-    # -----------------------------------------------------------------
     # Warns
-    # -----------------------------------------------------------------
 
     async def add_warn(
         self, guild_id: int, user_id: int, moderator_id: int, reason: str
@@ -167,12 +150,9 @@ class Database:
         await self.conn.commit()
         return cursor.rowcount
 
-    # -----------------------------------------------------------------
     # Leveling
-    # -----------------------------------------------------------------
 
     async def get_xp(self, guild_id: int, user_id: int) -> tuple[int, float]:
-        """Return (xp, last_message_timestamp) for a member."""
         async with self.conn.execute(
             "SELECT xp, last_message_at FROM levels WHERE guild_id = ? AND user_id = ?",
             (guild_id, user_id),
@@ -183,7 +163,6 @@ class Database:
     async def add_xp(
         self, guild_id: int, user_id: int, amount: int, timestamp: float
     ) -> int:
-        """Add XP and return the member's new total."""
         await self.conn.execute(
             "INSERT INTO levels (guild_id, user_id, xp, last_message_at) "
             "VALUES (?, ?, ?, ?) "
@@ -204,7 +183,6 @@ class Database:
             return list(await cursor.fetchall())
 
     async def get_rank(self, guild_id: int, user_id: int) -> int:
-        """1-based position on the leaderboard. 0 means unranked."""
         async with self.conn.execute(
             "SELECT COUNT(*) + 1 AS rank FROM levels "
             "WHERE guild_id = ? AND xp > (SELECT xp FROM levels "
@@ -214,9 +192,7 @@ class Database:
             row = await cursor.fetchone()
         return row["rank"] if row else 0
 
-    # -----------------------------------------------------------------
     # Tickets
-    # -----------------------------------------------------------------
 
     async def create_ticket(self, channel_id: int, guild_id: int, user_id: int) -> None:
         await self.conn.execute(
@@ -239,7 +215,6 @@ class Database:
         await self.conn.commit()
 
     async def count_open_tickets(self, guild_id: int, user_id: int) -> int:
-        """Used to stop one person opening fifty tickets."""
         async with self.conn.execute(
             "SELECT COUNT(*) AS n FROM tickets "
             "WHERE guild_id = ? AND user_id = ? AND closed = 0",
@@ -248,9 +223,7 @@ class Database:
             row = await cursor.fetchone()
         return row["n"] if row else 0
 
-    # -----------------------------------------------------------------
     # Role menus
-    # -----------------------------------------------------------------
 
     async def add_role_option(
         self, message_id: int, guild_id: int, role_id: int, label: str
@@ -269,16 +242,13 @@ class Database:
             return list(await cursor.fetchall())
 
     async def role_option_exists(self, guild_id: int, role_id: int) -> bool:
-        """Guard: a button must map to a role this guild actually published."""
         async with self.conn.execute(
             "SELECT 1 FROM role_menu_options WHERE guild_id = ? AND role_id = ? LIMIT 1",
             (guild_id, role_id),
         ) as cursor:
             return await cursor.fetchone() is not None
 
-    # -----------------------------------------------------------------
     # Blocked words
-    # -----------------------------------------------------------------
 
     async def add_blocked_word(self, guild_id: int, word: str) -> None:
         await self.conn.execute(

@@ -1,15 +1,6 @@
 """XP and levels.
 
-Members earn a random amount of XP per message, with a cooldown so that
-spamming doesn't farm levels. This is the single most requested feature
-in small Discord servers because it visibly rewards activity.
-
-The level curve is deliberately simple:
-
-    level = floor( sqrt(xp / 100) )
-
-So level 1 is 100 XP, level 2 is 400, level 3 is 900, level 10 is 10,000.
-Each level costs more than the last, which is what keeps it interesting.
+Curve is level = floor(sqrt(xp / 100)), so L1=100xp, L2=400, L10=10,000.
 """
 
 from __future__ import annotations
@@ -37,9 +28,7 @@ class Leveling(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    # -----------------------------------------------------------------
     # Earning XP
-    # -----------------------------------------------------------------
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
@@ -57,8 +46,6 @@ class Leveling(commands.Cog):
             message.guild.id, message.author.id
         )
 
-        # Cooldown: without this, one person spamming "a" fifty times
-        # outranks everyone who actually talks.
         if now - last_message_at < config.XP_COOLDOWN_SECONDS:
             return
 
@@ -91,9 +78,7 @@ class Leveling(commands.Cog):
         except discord.Forbidden:
             pass
 
-    # -----------------------------------------------------------------
     # Viewing progress
-    # -----------------------------------------------------------------
 
     @app_commands.command(name="rank", description="Show your level and XP")
     @app_commands.describe(member="Whose rank to show (default: yourself)")
@@ -154,7 +139,7 @@ class Leveling(commands.Cog):
             prefix = medals.get(position, f"`#{position}`")
             level = level_from_xp(row["xp"])
             lines.append(
-                f"{prefix} <@{row['user_id']}> — level **{level}** ({row['xp']:,} XP)"
+                f"{prefix} <@{row['user_id']}> - level **{level}** ({row['xp']:,} XP)"
             )
 
         embed = discord.Embed(

@@ -1,21 +1,7 @@
-"""Support ticket system.
+"""Support tickets.
 
-A staff member posts a panel with `/ticket-panel`. Members click its
-button and get a private channel only they and staff can see. Staff close
-it with another button, which posts a transcript-style summary to the log
-channel and deletes the channel.
-
-The important technical detail here is **persistent views**. A normal
-Discord button stops working when the bot restarts, because the bot
-forgets the callback. To survive restarts a view needs:
-
-  1. `timeout=None`
-  2. a fixed `custom_id` on every button
-  3. registration in `bot.setup_hook` via `bot.add_view(...)`
-
-Get any of those wrong and your customer's ticket panel quietly dies the
-next time the bot redeploys — which is exactly the kind of bug that gets
-you a refund request.
+Views here must be persistent (timeout=None, fixed custom_id, registered
+in Bot._register_persistent_views) or panels stop working after a restart.
 """
 
 from __future__ import annotations
@@ -36,8 +22,6 @@ MAX_OPEN_PER_USER = 3
 
 
 class TicketPanelView(discord.ui.View):
-    """The permanent 'Open a ticket' button."""
-
     def __init__(self) -> None:
         super().__init__(timeout=None)
 
@@ -55,7 +39,7 @@ class TicketPanelView(discord.ui.View):
         if guild is None:
             return
 
-        # Creating a channel takes a moment — acknowledge immediately.
+        # Channel creation exceeds the 3s interaction window.
         await interaction.response.defer(ephemeral=True)
 
         open_count = await bot.db.count_open_tickets(guild.id, interaction.user.id)
@@ -73,7 +57,6 @@ class TicketPanelView(discord.ui.View):
         if not isinstance(category, discord.CategoryChannel):
             category = None
 
-        # Only the opener, staff, and the bot can see the channel.
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             interaction.user: discord.PermissionOverwrite(
@@ -112,7 +95,7 @@ class TicketPanelView(discord.ui.View):
         embed = discord.Embed(
             title="Ticket opened",
             description=(
-                f"Hi {interaction.user.mention} — describe your problem here and "
+                f"Hi {interaction.user.mention} - describe your problem here and "
                 "someone will be with you shortly.\n\n"
                 "Staff can close this ticket with the button below."
             ),
@@ -130,8 +113,6 @@ class TicketPanelView(discord.ui.View):
 
 
 class TicketCloseView(discord.ui.View):
-    """The permanent 'Close ticket' button inside a ticket channel."""
-
     def __init__(self) -> None:
         super().__init__(timeout=None)
 
@@ -156,7 +137,6 @@ class TicketCloseView(discord.ui.View):
             )
             return
 
-        # The opener can close their own; otherwise you need Manage Channels.
         is_opener = interaction.user.id == ticket["user_id"]
         is_staff = interaction.user.guild_permissions.manage_channels
         if not (is_opener or is_staff):

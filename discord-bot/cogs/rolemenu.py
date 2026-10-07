@@ -1,21 +1,7 @@
 """Self-assignable roles via buttons.
 
-An admin builds a menu with `/rolemenu create`, then adds roles to it with
-`/rolemenu add`. Members click a button to give themselves that role, and
-click again to remove it.
-
-Two things worth understanding here:
-
-**DynamicItem.** A normal persistent button needs a fixed `custom_id`
-known at startup. But here the buttons depend on which roles an admin
-picked, which we only learn at runtime. `discord.ui.DynamicItem` solves
-this: it matches custom_ids against a regex template and rebuilds the
-button on demand, so `rolemenu:12345` still works after a restart.
-
-**The security check.** The role ID lives inside the custom_id, which is
-client-visible data. Without validation, a crafted interaction could ask
-for *any* role — including Administrator. So before granting anything we
-confirm the role was actually published in a menu by this guild.
+Buttons use DynamicItem because the role id isn't known until an admin
+builds the menu, so a fixed custom_id isn't possible.
 """
 
 from __future__ import annotations
@@ -58,8 +44,8 @@ class RoleButton(
         if guild is None:
             return
 
-        # The role id came from client-visible data. Never trust it blindly:
-        # confirm this guild actually published this role in a menu.
+        # role_id arrives in the custom_id, which is client-visible. Without
+        # this check a crafted interaction could request any role.
         if not await bot.db.role_option_exists(guild.id, self.role_id):
             await interaction.response.send_message(
                 "That role isn't available from this menu.", ephemeral=True
@@ -75,7 +61,7 @@ class RoleButton(
 
         if role >= guild.me.top_role:
             await interaction.response.send_message(
-                "I can't manage that role — it's above me in the role list. "
+                "I can't manage that role - it's above me in the role list. "
                 "Tell an admin to move my role higher.",
                 ephemeral=True,
             )
@@ -169,7 +155,7 @@ class RoleMenu(commands.Cog):
         guild = interaction.guild
         if role >= guild.me.top_role:
             await interaction.response.send_message(
-                f"I can't hand out {role.mention} — it's above my own top role. "
+                f"I can't hand out {role.mention} - it's above my own top role. "
                 "Move my role higher in Server Settings → Roles first.",
                 ephemeral=True,
             )
@@ -206,7 +192,7 @@ class RoleMenu(commands.Cog):
             message.id, guild.id, role.id, label or role.name
         )
 
-        # Rebuild the whole view from the database so it always matches state.
+        # Rebuild from the database so the view always matches stored state.
         options = await self.bot.db.get_role_options(message.id)
         view = discord.ui.View(timeout=None)
         for option in options:
@@ -228,7 +214,7 @@ class RoleMenu(commands.Cog):
     async def _find_message(
         self, interaction: discord.Interaction, message_id: int
     ) -> discord.Message | None:
-        """Look for the message in the current channel, then the whole guild."""
+        """Check the current channel first, then every text channel."""
         try:
             return await interaction.channel.fetch_message(message_id)
         except (discord.NotFound, discord.Forbidden):

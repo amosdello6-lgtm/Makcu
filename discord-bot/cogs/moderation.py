@@ -1,10 +1,4 @@
-"""Moderation commands: warn, kick, ban, timeout, purge.
-
-The interesting part of a moderation cog is not the kick call — it's the
-safety checks around it. Cheap bots skip these and then a moderator can
-ban someone above them in the role hierarchy, or ban the owner, or ban
-themselves. Every command here runs the same `_can_moderate` gate first.
-"""
+"""Moderation: warn, kick, ban, timeout, purge."""
 
 from __future__ import annotations
 
@@ -22,14 +16,10 @@ class Moderation(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    # -----------------------------------------------------------------
-    # Shared safety + logging
-    # -----------------------------------------------------------------
-
     def _can_moderate(
         self, actor: discord.Member, target: discord.Member
     ) -> Optional[str]:
-        """Return an error string if this action isn't allowed, else None."""
+        """Return an error string if the action isn't allowed, else None."""
         if actor.id == target.id:
             return "You can't do that to yourself."
         if target.id == actor.guild.owner_id:
@@ -37,7 +27,7 @@ class Moderation(commands.Cog):
         if target.bot and target.id == self.bot.user.id:
             return "I'm not going to do that to myself."
 
-        # The guild owner outranks everyone, including by role position.
+        # The owner outranks everyone regardless of role position.
         if actor.id != actor.guild.owner_id and target.top_role >= actor.top_role:
             return (
                 f"{target.mention} has a role equal to or above yours, "
@@ -62,7 +52,6 @@ class Moderation(commands.Cog):
         reason: str,
         colour: int,
     ) -> None:
-        """Post to the configured log channel, if there is one."""
         channel_id = await self.bot.db.get_int_setting(guild.id, "log_channel")
         if channel_id is None:
             return
@@ -86,9 +75,7 @@ class Moderation(commands.Cog):
             # Missing permission in the log channel shouldn't fail the action.
             pass
 
-    # -----------------------------------------------------------------
     # Warn
-    # -----------------------------------------------------------------
 
     @app_commands.command(name="warn", description="Warn a member")
     @app_commands.describe(member="Who to warn", reason="Why")
@@ -115,7 +102,6 @@ class Moderation(commands.Cog):
             f"Reason: {reason}"
         )
 
-        # Tell the member privately. They may have DMs closed — that's fine.
         try:
             await member.send(
                 f"You were warned in **{interaction.guild.name}**.\nReason: {reason}"
@@ -147,7 +133,7 @@ class Moderation(commands.Cog):
             description=f"{len(warns)} total",
             color=config.COLOR_WARNING,
         )
-        # Embeds cap at 25 fields — show the 10 most recent.
+        # Embeds cap at 25 fields - show the 10 most recent.
         for warn in warns[:10]:
             embed.add_field(
                 name=f"#{warn['id']} · {warn['created_at']}",
@@ -171,9 +157,7 @@ class Moderation(commands.Cog):
             f"Cleared **{removed}** warning(s) from {member.mention}."
         )
 
-    # -----------------------------------------------------------------
     # Timeout
-    # -----------------------------------------------------------------
 
     @app_commands.command(
         name="timeout", description="Temporarily mute a member (Discord timeout)"
@@ -230,9 +214,7 @@ class Moderation(commands.Cog):
             return
         await interaction.response.send_message(f"Timeout removed from {member.mention}.")
 
-    # -----------------------------------------------------------------
     # Kick / ban
-    # -----------------------------------------------------------------
 
     @app_commands.command(name="kick", description="Kick a member from the server")
     @app_commands.describe(member="Who to kick", reason="Why")
@@ -249,7 +231,7 @@ class Moderation(commands.Cog):
             await interaction.response.send_message(error, ephemeral=True)
             return
 
-        # DM before kicking — afterwards we may no longer share a server.
+        # DM before kicking - afterwards we may no longer share a server.
         try:
             await member.send(
                 f"You were kicked from **{interaction.guild.name}**.\nReason: {reason}"
@@ -326,7 +308,7 @@ class Moderation(commands.Cog):
     async def unban(self, interaction: discord.Interaction, user_id: str) -> None:
         if not user_id.isdigit():
             await interaction.response.send_message(
-                "That isn't a valid user ID — it should be all digits.", ephemeral=True
+                "That isn't a valid user ID - it should be all digits.", ephemeral=True
             )
             return
 
@@ -346,9 +328,7 @@ class Moderation(commands.Cog):
 
         await interaction.response.send_message(f"Unbanned **{user}**.")
 
-    # -----------------------------------------------------------------
     # Purge
-    # -----------------------------------------------------------------
 
     @app_commands.command(name="purge", description="Bulk-delete recent messages")
     @app_commands.describe(
@@ -363,8 +343,7 @@ class Moderation(commands.Cog):
         amount: app_commands.Range[int, 1, 100],
         member: Optional[discord.Member] = None,
     ) -> None:
-        # Deleting can take a few seconds, which is longer than Discord's
-        # 3-second window to reply — so acknowledge first, answer later.
+        # Bulk delete exceeds the 3s interaction window.
         await interaction.response.defer(ephemeral=True)
 
         def matches(message: discord.Message) -> bool:
@@ -383,9 +362,7 @@ class Moderation(commands.Cog):
             f"Deleted **{len(deleted)}** message(s){who}.", ephemeral=True
         )
 
-    # -----------------------------------------------------------------
     # Error handling for every command in this cog
-    # -----------------------------------------------------------------
 
     async def cog_app_command_error(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError

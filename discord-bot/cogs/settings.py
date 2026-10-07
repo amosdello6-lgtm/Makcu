@@ -1,14 +1,7 @@
-"""Per-server configuration commands.
+"""Per-server configuration.
 
-This is the most commercially important file in the bot. Without it you
-have a bot that does whatever you hardcoded. With it, the person who
-bought the bot can point it at their own channels and roles, change the
-welcome text, and turn features on and off — without ever asking you for
-a code change.
-
-Every setting is just a row in the `settings` table keyed by guild, so
-adding a new one is one command here plus one `get_setting` call wherever
-the feature lives.
+Settings are rows in the `settings` table keyed by guild, so a new option
+needs a command here plus a get_setting call where the feature lives.
 """
 
 from __future__ import annotations
@@ -20,8 +13,7 @@ from discord.ext import commands
 from core import config
 
 
-# Every key the bot understands, with a human label for /config view.
-# Add a row here when you add a setting and it shows up automatically.
+# Labels for /config view. Adding a row here surfaces the setting there.
 KNOWN_SETTINGS: dict[str, str] = {
     "welcome_channel": "Welcome channel",
     "welcome_message": "Welcome message",
@@ -37,14 +29,11 @@ KNOWN_SETTINGS: dict[str, str] = {
 
 
 class Settings(commands.Cog):
-    """Server owners configure the bot here."""
-
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    # `default_permissions` hides these commands from members who can't
-    # use them. It's a UI hint — the real check is the decorator on each
-    # command, because a server admin can override Discord's defaults.
+    # default_permissions only hides the commands in the UI; admins can
+    # override it, so each command still carries its own check.
     group = app_commands.Group(
         name="config",
         description="Configure the bot for this server",
@@ -52,9 +41,7 @@ class Settings(commands.Cog):
         guild_only=True,
     )
 
-    # -----------------------------------------------------------------
     # Viewing
-    # -----------------------------------------------------------------
 
     @group.command(name="view", description="Show every current setting")
     @app_commands.checks.has_permissions(manage_guild=True)
@@ -76,7 +63,6 @@ class Settings(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     def _render(self, key: str, raw: str | None) -> str:
-        """Turn a stored string into something readable in Discord."""
         if raw is None:
             return "*not set*"
         if key.endswith("_channel") or key == "ticket_category":
@@ -85,12 +71,9 @@ class Settings(commands.Cog):
             return f"<@&{raw}>"
         if key.endswith("_enabled"):
             return "on" if raw == "1" else "off"
-        # Long text — keep the embed from exploding.
         return raw if len(raw) <= 300 else raw[:297] + "..."
 
-    # -----------------------------------------------------------------
     # Channels
-    # -----------------------------------------------------------------
 
     @group.command(
         name="welcome-channel",
@@ -144,9 +127,7 @@ class Settings(commands.Cog):
     ) -> None:
         await self._set_or_clear(interaction, "levelup_channel", channel)
 
-    # -----------------------------------------------------------------
     # Roles
-    # -----------------------------------------------------------------
 
     @group.command(
         name="autorole",
@@ -157,12 +138,11 @@ class Settings(commands.Cog):
     async def autorole(
         self, interaction: discord.Interaction, role: discord.Role | None = None
     ) -> None:
-        # A bot can only hand out roles below its own highest role.
         if role is not None and interaction.guild is not None:
             me = interaction.guild.me
             if role >= me.top_role:
                 await interaction.response.send_message(
-                    f"I can't assign {role.mention} — it's higher than my own top "
+                    f"I can't assign {role.mention} - it's higher than my own top "
                     f"role ({me.top_role.mention}). Drag my role above it in "
                     "Server Settings → Roles.",
                     ephemeral=True,
@@ -170,9 +150,7 @@ class Settings(commands.Cog):
                 return
         await self._set_or_clear(interaction, "autorole", role)
 
-    # -----------------------------------------------------------------
     # Text
-    # -----------------------------------------------------------------
 
     @group.command(
         name="welcome-message",
@@ -195,7 +173,7 @@ class Settings(commands.Cog):
 
         if len(message) > 1500:
             await interaction.response.send_message(
-                "That's too long — keep it under 1500 characters.", ephemeral=True
+                "That's too long - keep it under 1500 characters.", ephemeral=True
             )
             return
 
@@ -210,9 +188,7 @@ class Settings(commands.Cog):
             f"Welcome message saved. Preview:\n\n{preview}", ephemeral=True
         )
 
-    # -----------------------------------------------------------------
     # Tickets
-    # -----------------------------------------------------------------
 
     @group.command(
         name="ticket-category",
@@ -264,9 +240,7 @@ class Settings(commands.Cog):
     ) -> None:
         await self._set_or_clear(interaction, "ticket_log_channel", channel)
 
-    # -----------------------------------------------------------------
     # Toggles
-    # -----------------------------------------------------------------
 
     @group.command(name="leveling", description="Turn the XP / leveling system on or off")
     @app_commands.describe(enabled="on or off")
@@ -279,9 +253,7 @@ class Settings(commands.Cog):
             f"Leveling is now **{'on' if enabled else 'off'}**.", ephemeral=True
         )
 
-    # -----------------------------------------------------------------
     # Shared helper
-    # -----------------------------------------------------------------
 
     async def _set_or_clear(
         self,

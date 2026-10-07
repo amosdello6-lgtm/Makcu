@@ -1,10 +1,4 @@
-"""General purpose commands: help, ping, server info, user info, avatar.
-
-`/help` matters more than it looks. It's the first thing anyone runs
-after inviting the bot, and it's what a buyer screenshots when deciding
-whether your bot is worth paying for. It builds itself from the commands
-actually registered, so it can never go stale.
-"""
+"""help, ping, serverinfo, userinfo, avatar."""
 
 from __future__ import annotations
 
@@ -17,7 +11,6 @@ from discord.ext import commands
 from core import config
 
 
-# Friendly section names, keyed by the cog class name.
 CATEGORY_LABELS = {
     "General": "General",
     "Moderation": "Moderation",
@@ -44,7 +37,6 @@ class General(commands.Cog):
             color=config.COLOR_PRIMARY,
         )
 
-        # Group registered slash commands by the cog that defines them.
         by_category: dict[str, list[str]] = {}
         for command in self.bot.tree.walk_commands():
             if isinstance(command, app_commands.Group):
@@ -52,13 +44,12 @@ class General(commands.Cog):
             cog_name = getattr(command.binding, "__cog_name__", None) or "Other"
             label = CATEGORY_LABELS.get(cog_name, cog_name)
             by_category.setdefault(label, []).append(
-                f"`/{command.qualified_name}` — {command.description}"
+                f"`/{command.qualified_name}` - {command.description}"
             )
 
         for label in sorted(by_category):
             body = "\n".join(sorted(by_category[label]))
-            # Embed fields cap at 1024 characters.
-            if len(body) > 1024:
+            if len(body) > 1024:  # embed field limit
                 body = body[:1000] + "\n*…and more*"
             embed.add_field(name=label, value=body, inline=False)
 
@@ -69,7 +60,7 @@ class General(commands.Cog):
     async def ping(self, interaction: discord.Interaction) -> None:
         latency_ms = round(self.bot.latency * 1000)
         await interaction.response.send_message(
-            f"Pong — **{latency_ms}ms** to Discord.", ephemeral=True
+            f"Pong - **{latency_ms}ms** to Discord.", ephemeral=True
         )
 
     @app_commands.command(name="serverinfo", description="Stats about this server")

@@ -1,11 +1,6 @@
-"""Automatic moderation: invite links, URLs, blocked words, mass mentions.
+"""Message filtering: invites, URLs, mass mentions, blocked words.
 
-Every filter is off by default and toggled per server, because an automod
-that starts deleting things the moment it joins gets the bot kicked.
-
-Staff are always exempt — anyone with Manage Messages skips every filter.
-Without that, your admins can't post a link in their own server, which is
-the first complaint every automod bot gets.
+All filters are off by default. Manage Messages bypasses everything.
 """
 
 from __future__ import annotations
@@ -39,15 +34,12 @@ class AutoMod(commands.Cog):
         guild_only=True,
     )
 
-    # -----------------------------------------------------------------
     # The filter itself
-    # -----------------------------------------------------------------
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot or message.guild is None:
             return
-        # Staff bypass every filter.
         if message.author.guild_permissions.manage_messages:
             return
 
@@ -70,31 +62,31 @@ class AutoMod(commands.Cog):
         await self._log(message, reason)
 
     async def _violation(self, message: discord.Message) -> str | None:
-        """Return a human-readable reason, or None if the message is fine."""
+        """Return a reason string, or None if the message is clean."""
         guild_id = message.guild.id
         db = self.bot.db
         content = message.content
 
         if await db.get_setting(guild_id, "automod_invites", "0") == "1":
             if INVITE_RE.search(content):
-                return "— server invites aren't allowed here."
+                return " - server invites aren't allowed here."
 
         if await db.get_setting(guild_id, "automod_links", "0") == "1":
             if URL_RE.search(content):
-                return "— links aren't allowed here."
+                return " - links aren't allowed here."
 
         if await db.get_setting(guild_id, "automod_mentions", "0") == "1":
             total = len(message.mentions) + len(message.role_mentions)
             if total >= MASS_MENTION_THRESHOLD:
-                return f"— don't mention {MASS_MENTION_THRESHOLD}+ people at once."
+                return f" - don't mention {MASS_MENTION_THRESHOLD}+ people at once."
 
         blocked = await db.get_blocked_words(guild_id)
         if blocked:
             lowered = content.lower()
-            # Word-boundary match so "assistant" doesn't trip a block on "ass".
+            # Word boundaries, so blocking "ass" doesn't match "assistant".
             for word in blocked:
                 if re.search(rf"\b{re.escape(word)}\b", lowered):
-                    return "— that word isn't allowed here."
+                    return " - that word isn't allowed here."
 
         return None
 
@@ -107,8 +99,8 @@ class AutoMod(commands.Cog):
             return
 
         embed = discord.Embed(
-            title="Automod — message deleted",
-            description=reason.lstrip("— ").capitalize(),
+            title="Automod - message deleted",
+            description=reason.lstrip(" - ").capitalize(),
             color=config.COLOR_WARNING,
         )
         embed.add_field(name="Author", value=message.author.mention)
@@ -121,9 +113,7 @@ class AutoMod(commands.Cog):
         except discord.Forbidden:
             pass
 
-    # -----------------------------------------------------------------
     # Configuration
-    # -----------------------------------------------------------------
 
     @group.command(name="invites", description="Delete messages containing Discord invites")
     @app_commands.checks.has_permissions(manage_guild=True)

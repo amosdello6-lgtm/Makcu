@@ -1,19 +1,3 @@
-"""Entry point.
-
-Run with:  python bot.py
-
-The bot itself is deliberately thin. All it does is:
-  1. open the database,
-  2. load every file in `cogs/` as a feature module,
-  3. register slash commands with Discord,
-  4. log in.
-
-Adding a feature means dropping a new file into `cogs/`. You never edit
-this file to do it. That is the whole point of the structure — it's what
-lets you sell the same base to twenty customers and bolt on whatever
-each one asks for.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -38,16 +22,13 @@ log = logging.getLogger("bot")
 
 class Bot(commands.Bot):
     def __init__(self) -> None:
-        # Intents are permissions for *events*. Discord makes you declare
-        # which ones you want, and two of these are "privileged" — you
-        # must also tick them on the Developer Portal under Bot ->
-        # Privileged Gateway Intents, or login fails.
         intents = discord.Intents.default()
-        intents.message_content = True   # privileged: needed to read messages for XP
-        intents.members = True           # privileged: needed for join/leave events
+        # Both are privileged and must also be enabled in the Developer Portal.
+        intents.message_content = True
+        intents.members = True
 
         super().__init__(
-            command_prefix=commands.when_mentioned,  # slash commands are the real UI
+            command_prefix=commands.when_mentioned,
             intents=intents,
             help_command=None,
         )
@@ -55,42 +36,39 @@ class Bot(commands.Bot):
         self.db = Database(config.DATABASE_PATH)
 
     async def setup_hook(self) -> None:
-        """Runs once, after login but before the bot is ready."""
         await self.db.connect()
         log.info("database ready at %s", config.DATABASE_PATH)
 
         await self._load_cogs()
         self._register_persistent_views()
-
         await self._sync_commands()
 
-    def _register_persistent_views(self) -> None:
-        """Re-attach views whose buttons must survive a restart.
+    async def _load_cogs(self) -> None:
+        cogs_dir = pathlib.Path(__file__).parent / "cogs"
+        for path in sorted(cogs_dir.glob("*.py")):
+            if path.stem.startswith("_"):
+                continue
+            extension = f"cogs.{path.stem}"
+            try:
+                await self.load_extension(extension)
+                log.info("loaded %s", extension)
+            except Exception:
+                # A broken cog shouldn't stop the rest of the bot booting.
+                log.error("FAILED to load %s:\n%s", extension, traceback.format_exc())
 
-        Discord doesn't store callbacks — only the `custom_id` on each
-        button. On boot we tell the bot which classes handle which ids,
-        otherwise every ticket panel and role menu posted before the
-        restart becomes a dead button.
-        """
+    def _register_persistent_views(self) -> None:
+        # Discord only stores a button's custom_id, not its callback. Without
+        # re-registering here, every panel posted before a restart goes dead.
         from cogs.tickets import TicketPanelView, TicketCloseView
         from cogs.rolemenu import RoleButton
 
         self.add_view(TicketPanelView())
         self.add_view(TicketCloseView())
-        # Role buttons carry their role id in the custom_id, so they're
-        # matched by regex template rather than registered one by one.
         self.add_dynamic_items(RoleButton)
         log.info("persistent views registered")
 
     async def _sync_commands(self) -> None:
-        """Tell Discord which slash commands exist.
-
-        Guild-scoped sync is instant; global sync can take up to an hour.
-        A guild sync fails with 403 when the bot isn't in that server, or
-        was invited without the `applications.commands` scope — that's a
-        setup mistake, not a reason to refuse to start, so fall back to a
-        global sync and say exactly what to fix.
-        """
+        # Guild sync is instant; global sync can take up to an hour.
         if config.DEV_GUILD_ID:
             guild = discord.Object(id=config.DEV_GUILD_ID)
             try:
@@ -103,44 +81,26 @@ class Bot(commands.Bot):
                 return
             except discord.Forbidden:
                 log.error(
-                    "Can't sync commands to server %s — the bot isn't in it, or "
-                    "was invited without the 'applications.commands' scope.",
+                    "Can't sync to server %s - bot isn't in it, or was invited "
+                    "without the 'applications.commands' scope.",
                     config.DEV_GUILD_ID,
                 )
                 log.error(
-                    "Re-invite it with this link, then restart:\n"
-                    "https://discord.com/api/oauth2/authorize"
+                    "Re-invite with:\nhttps://discord.com/api/oauth2/authorize"
                     "?client_id=%s&permissions=1099780156422"
                     "&scope=bot%%20applications.commands",
                     self.application_id,
                 )
-                log.warning("Falling back to a global sync for now.")
+                log.warning("Falling back to global sync.")
 
         synced = await self.tree.sync()
-        log.info(
-            "synced %d commands globally (may take up to 1h to appear)", len(synced)
-        )
-
-    async def _load_cogs(self) -> None:
-        cogs_dir = pathlib.Path(__file__).parent / "cogs"
-        for path in sorted(cogs_dir.glob("*.py")):
-            if path.stem.startswith("_"):
-                continue
-            extension = f"cogs.{path.stem}"
-            try:
-                await self.load_extension(extension)
-                log.info("loaded %s", extension)
-            except Exception:
-                # One broken cog should never stop the whole bot booting.
-                log.error("FAILED to load %s:\n%s", extension, traceback.format_exc())
+        log.info("synced %d commands globally (up to 1h to appear)", len(synced))
 
     async def on_ready(self) -> None:
         log.info("logged in as %s (id %s)", self.user, self.user.id if self.user else "?")
         log.info("serving %d guild(s)", len(self.guilds))
         await self.change_presence(
-            activity=discord.Activity(
-                type=discord.ActivityType.watching, name="/help"
-            )
+            activity=discord.Activity(type=discord.ActivityType.watching, name="/help")
         )
 
     async def close(self) -> None:

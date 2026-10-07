@@ -1,9 +1,6 @@
 """Welcome / goodbye messages and auto-role.
 
-Everything here is driven by settings, so the same code behaves
-differently in every server it runs in. If no welcome channel is set,
-the whole feature silently does nothing — that's deliberate, a bot that
-spams an unconfigured server gets removed.
+Stays silent until a channel is configured.
 """
 
 from __future__ import annotations
@@ -23,7 +20,6 @@ DEFAULT_GOODBYE = "**{username}** has left the server."
 
 
 def render(template: str, member: discord.Member) -> str:
-    """Substitute the placeholders a server owner can use in their text."""
     return (
         template.replace("{user}", member.mention)
         .replace("{username}", member.display_name)
@@ -55,15 +51,13 @@ class Welcome(commands.Cog):
         except discord.Forbidden:
             log.warning("no permission to post goodbye in %s", channel.id)
 
-    # -----------------------------------------------------------------
-
     async def _assign_autorole(self, member: discord.Member) -> None:
         role_id = await self.bot.db.get_int_setting(member.guild.id, "autorole")
         if role_id is None:
             return
         role = member.guild.get_role(role_id)
         if role is None:
-            # The role was deleted since it was configured — clean up.
+            # The role was deleted since it was configured - clean up.
             await self.bot.db.clear_setting(member.guild.id, "autorole")
             return
 
@@ -71,7 +65,7 @@ class Welcome(commands.Cog):
             await member.add_roles(role, reason="Auto-role on join")
         except discord.Forbidden:
             log.warning(
-                "can't assign autorole %s in guild %s — check role hierarchy",
+                "can't assign autorole %s in guild %s - check role hierarchy",
                 role.id, member.guild.id,
             )
 
