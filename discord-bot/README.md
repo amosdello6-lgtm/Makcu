@@ -321,6 +321,10 @@ It replies with a message ID. Use it to attach roles:
 
 The bot has to stay running to work. Closing your terminal stops it.
 
+> **New to this?** [HOSTING.md](HOSTING.md) is a step-by-step walkthrough
+> that assumes no prior experience. The summary below is for people who
+> already know their way around a server.
+
 > **Render's free tier is not suitable.** Free web services sleep after 15
 > minutes of inactivity, which disconnects the bot. Ignore guides that
 > recommend it.
